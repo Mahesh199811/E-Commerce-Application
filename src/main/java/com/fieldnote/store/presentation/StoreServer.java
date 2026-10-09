@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class StoreServer {
-    private static final Path PUBLIC_DIR = Path.of("public");
+    private static final Path PUBLIC_DIR = Path.of("frontend", "dist");
     private final CatalogService catalog;
     private final CheckoutService checkout;
 
@@ -80,30 +80,36 @@ public final class StoreServer {
     }
 
     private void handleStatic(HttpExchange exchange) throws IOException {
-        String path = exchange.getRequestURI().getPath();
-        String file = switch (path) {
-            case "/", "/index.html" -> "index.html";
-            case "/styles.css" -> "styles.css";
-            case "/app.js" -> "app.js";
-            default -> null;
-        };
-        if (file == null || !exchange.getRequestMethod().equals("GET")) {
+        if (!exchange.getRequestMethod().equals("GET")) {
             sendJson(exchange, 404, "{\"error\":\"Not found.\"}");
             return;
         }
-        Path target = PUBLIC_DIR.resolve(file);
-        if (!Files.isRegularFile(target)) {
-            sendJson(exchange, 500, "{\"error\":\"Storefront files were not found. Start the server from the project folder.\"}");
+        String requestPath = exchange.getRequestURI().getPath();
+        String file = requestPath.equals("/") ? "index.html" : requestPath.substring(1);
+        Path publicDirectory = PUBLIC_DIR.toAbsolutePath().normalize();
+        Path target = publicDirectory.resolve(file).normalize();
+        if (!target.startsWith(publicDirectory) || !Files.isRegularFile(target)) {
+            sendJson(exchange, 404, "{\"error\":\"Not found. Build the React storefront before starting the server.\"}");
             return;
         }
-        String contentType = file.endsWith(".css") ? "text/css; charset=utf-8"
-                : file.endsWith(".js") ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8";
+        String contentType = contentType(target);
         byte[] content = Files.readAllBytes(target);
         exchange.getResponseHeaders().set("Content-Type", contentType);
         exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
         exchange.sendResponseHeaders(200, content.length);
         exchange.getResponseBody().write(content);
         exchange.close();
+    }
+
+    private static String contentType(Path file) {
+        String name = file.getFileName().toString();
+        if (name.endsWith(".css")) return "text/css; charset=utf-8";
+        if (name.endsWith(".js")) return "text/javascript; charset=utf-8";
+        if (name.endsWith(".html")) return "text/html; charset=utf-8";
+        if (name.endsWith(".svg")) return "image/svg+xml";
+        if (name.endsWith(".json")) return "application/json; charset=utf-8";
+        if (name.endsWith(".woff2")) return "font/woff2";
+        return "application/octet-stream";
     }
 
     private static Map<String, String> parseForm(String body) {
