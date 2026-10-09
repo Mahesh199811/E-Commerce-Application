@@ -2,6 +2,8 @@ package com.fieldnote.store.presentation;
 
 import com.fieldnote.store.model.Order;
 import com.fieldnote.store.model.Product;
+import com.fieldnote.store.repository.InMemoryStoreRepository;
+import com.fieldnote.store.repository.MySqlStoreRepository;
 import com.fieldnote.store.repository.StoreRepository;
 import com.fieldnote.store.service.CatalogService;
 import com.fieldnote.store.service.CheckoutService;
@@ -14,6 +16,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,13 +25,22 @@ public final class StoreServer {
     private final CatalogService catalog;
     private final CheckoutService checkout;
 
-    private StoreServer() {
-        StoreRepository repository = new StoreRepository();
+    private StoreServer() throws SQLException {
+        String databaseUrl = System.getenv("DB_URL");
+        StoreRepository repository;
+        if (databaseUrl == null || databaseUrl.isBlank()) {
+            repository = new InMemoryStoreRepository();
+            System.out.println("Using in-memory product and order storage.");
+        } else {
+            repository = new MySqlStoreRepository(databaseUrl, System.getenv("DB_USER"),
+                    System.getenv("DB_PASSWORD"));
+            System.out.println("Using MySQL product and order storage.");
+        }
         catalog = new CatalogService(repository);
         checkout = new CheckoutService(repository);
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, SQLException {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
         StoreServer app = new StoreServer();
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);

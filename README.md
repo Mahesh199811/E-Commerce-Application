@@ -22,26 +22,29 @@ Open the Vite URL shown in the terminal, usually [http://localhost:5173](http://
 
 To serve the compiled React app from Java on port 8080 instead, build it with `cd frontend && npm ci && npm run build`, then run `./run.sh`.
 
-## Run with Docker
+## Run with Docker Compose
 
-Build the image from the project root. The final `.` is the Docker build context:
-
-```sh
-docker build -t e-commerce:1.0 .
-```
-
-Run it on host port 8081, which avoids conflicting with the local Java server on port 8080:
+Compose starts three services: the React/Vite frontend, Java API backend, and MySQL database. Products, inventory, and orders persist in a Docker volume. From the project root, run:
 
 ```sh
-docker run --rm --name e-commerce -p 8081:8080 e-commerce:1.0
+docker compose up --build
 ```
 
-Open [http://localhost:8081](http://localhost:8081). If Docker says the name `e-commerce` is already in use from a failed run, remove that stopped container once with `docker rm e-commerce` and retry.
+Open [http://localhost:5174](http://localhost:5174). The frontend forwards API requests to the backend, which stores data in MySQL over the private Compose network. If port 5174 is busy, choose another host port:
+
+```sh
+APP_PORT=5175 docker compose up --build
+```
+
+Stop the services with `Ctrl+C`, then remove their containers with `docker compose down`.
+
+The Compose file uses demo-only database passwords by default. Set `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` in your shell or a local `.env` file before using this outside a local demo. `docker compose down -v` also deletes the database volume and all stored data.
 
 ## Tiers
 
-- Presentation: `frontend/src/main.jsx` contains the React storefront; `src/main/java/com/fieldnote/store/presentation/StoreServer.java` serves the production build and HTTP API.
+- Presentation: `frontend/src/main.jsx` contains the React storefront; the Vite frontend proxies requests to the Java API.
+- API: `src/main/java/com/fieldnote/store/presentation/StoreServer.java` serves the HTTP API.
 - Service: catalog and checkout validation live in `src/main/java/com/fieldnote/store/service/`.
-- Data: `src/main/java/com/fieldnote/store/repository/StoreRepository.java` provides the seeded product catalog, inventory, and in-memory orders.
+- Data: `src/main/java/com/fieldnote/store/repository/MySqlStoreRepository.java` stores products, inventory, and orders in MySQL. The `StoreRepository` interface also has an in-memory implementation for local Java runs without `DB_URL`.
 
-Orders and inventory reset when the server restarts. Product photography loads from Unsplash, and the typefaces load from Google Fonts.
+The first database startup seeds the catalog; orders and inventory persist across container restarts. Running `./run.sh` without `DB_URL` uses in-memory storage for local development, so data resets when that process stops. Product photography loads from Unsplash, and the typefaces load from Google Fonts.

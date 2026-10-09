@@ -1,0 +1,47 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      DB_URL: jdbc:mysql://database:3306/fieldnote?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USER: fieldnote
+      DB_PASSWORD: ${MYSQL_PASSWORD:-fieldnote-dev-only}
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  database:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: fieldnote
+      MYSQL_USER: fieldnote
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-fieldnote-dev-only}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-dev-only}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PORT:-5174}:5173"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

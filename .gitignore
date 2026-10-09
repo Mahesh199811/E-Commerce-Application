@@ -1,3 +1,5 @@
 out/
 frontend/node_modules/
 frontend/dist/
+target/
+/.env
